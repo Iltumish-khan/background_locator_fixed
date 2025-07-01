@@ -27,19 +27,21 @@ apply plugin: 'kotlin-android'
 android {
     namespace 'yukams.app.background_locator_2'
 
-    compileSdkVersion 31 
-
+    compileSdkVersion 31
 
     defaultConfig {
         minSdkVersion 19
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
+
     sourceSets {
         main.java.srcDirs += 'src/main/kotlin'
     }
+
     lintOptions {
         disable 'InvalidPackage'
     }
+
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_1_8
         targetCompatibility JavaVersion.VERSION_1_8
@@ -48,7 +50,6 @@ android {
     kotlinOptions {
         jvmTarget = '1.8'
     }
-}
 }
 
 dependencies {
