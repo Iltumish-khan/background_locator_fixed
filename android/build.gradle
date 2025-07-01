@@ -5,7 +5,7 @@ buildscript {
     ext.kotlin_version = '1.7.20'
     repositories {
         google()
-        mavenCentral()
+        mavenCentral()  // substitui jcenter() que foi descontinuado
     }
 
     dependencies {
@@ -27,10 +27,11 @@ apply plugin: 'kotlin-android'
 android {
     namespace 'yukams.app.background_locator_2'
 
-    compileSdkVersion 31
+    compileSdkVersion 31  // o android:attr/lStar so existe do 31 em diante
 
     defaultConfig {
         minSdkVersion 19
+        targetSdkVersion 31 
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
     }
 
