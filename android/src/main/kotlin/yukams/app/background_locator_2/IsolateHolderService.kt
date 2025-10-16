@@ -84,58 +84,64 @@ class IsolateHolderService : MethodChannel.MethodCallHandler, LocationUpdateList
         startForeground(notificationId, getNotification())
     }
 
-    private fun start() {
-        (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
-            newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
-                setReferenceCounted(false)
-                acquire(wakeLockTime)
-            }
-        }
-
-        // Starting Service as foreground with a notification prevent service from closing
-        val notification = getNotification()
-        startForeground(notificationId, notification)
-
-        pluggables.forEach {
-            context?.let { it1 -> it.onServiceStart(it1) }
+private fun start() {
+    (getSystemService(Context.POWER_SERVICE) as PowerManager).run {
+        newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, WAKELOCK_TAG).apply {
+            setReferenceCounted(false)
+            acquire(wakeLockTime)
         }
     }
+
+    // Start foreground with our custom persistent notification
+    startForeground(notificationId, getNotification())
+
+    // Call pluggables
+    pluggables.forEach {
+        context?.let { it1 -> it.onServiceStart(it1) }
+    }
+}
 
     private fun getNotification(): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            // Notification channel is available in Android O and up
-            val channel = NotificationChannel(
-                Keys.CHANNEL_ID, notificationChannelName,
-                NotificationManager.IMPORTANCE_LOW
-            )
-
-            (getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager)
-                .createNotificationChannel(channel)
-        }
-
-        val intent = Intent(this, getMainActivityClass(this))
-        intent.action = Keys.NOTIFICATION_ACTION
-
-        val pendingIntent: PendingIntent = PendingIntent.getActivity(
-            this,
-            1, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+        // Create notification channel if not exists
+        val channel = NotificationChannel(
+            Keys.CHANNEL_ID, notificationChannelName,
+            NotificationManager.IMPORTANCE_LOW // LOW so it doesn’t make sound
         )
-
-        return NotificationCompat.Builder(this, Keys.CHANNEL_ID)
-            .setContentTitle(notificationTitle)
-            .setContentText(notificationMsg)
-            .setStyle(
-                NotificationCompat.BigTextStyle()
-                    .bigText(notificationBigMsg)
-            )
-            .setSmallIcon(icon)
-            .setColor(notificationIconColor)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setContentIntent(pendingIntent)
-            .setOnlyAlertOnce(true) // so when data is updated don't make sound and alert in android 8.0+
-            .setOngoing(true)
-            .build()
+        channel.description = "Background location tracking"
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        nm.createNotificationChannel(channel)
     }
+
+    val intent = Intent(this, getMainActivityClass(this))
+    intent.action = Keys.NOTIFICATION_ACTION
+
+    val pendingIntent: PendingIntent = PendingIntent.getActivity(
+        this,
+        1,
+        intent,
+        PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT
+    )
+
+    val builder = NotificationCompat.Builder(this, Keys.CHANNEL_ID)
+        .setContentTitle(notificationTitle)
+        .setContentText(notificationMsg)
+        .setStyle(NotificationCompat.BigTextStyle().bigText(notificationBigMsg))
+        .setSmallIcon(icon)
+        .setColor(notificationIconColor)
+        .setPriority(NotificationCompat.PRIORITY_LOW) // LOW avoids notification noise
+        .setContentIntent(pendingIntent)
+        .setOngoing(true) // ❌ makes notification non-dismissible
+        .setAutoCancel(false) // ❌ ensure it won’t auto-cancel
+        .setOnlyAlertOnce(true)
+        .setCategory(NotificationCompat.CATEGORY_SERVICE)
+
+    val notif = builder.build()
+    notif.flags = notif.flags or Notification.FLAG_ONGOING_EVENT
+    notif.flags = notif.flags and Notification.FLAG_AUTO_CANCEL.inv()
+
+    return notif
+}
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         Log.e("IsolateHolderService", "onStartCommand => intent.action : ${intent?.action}")
@@ -229,29 +235,24 @@ class IsolateHolderService : MethodChannel.MethodCallHandler, LocationUpdateList
         }
     }
 
-    private fun updateNotification(intent: Intent) {
-        Log.e("IsolateHolderService", "updateNotification")
-        if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_TITLE)) {
-            notificationTitle =
-                intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_TITLE).toString()
-        }
-
-        if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_MSG)) {
-            notificationMsg =
-                intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_MSG).toString()
-        }
-
-        if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_BIG_MSG)) {
-            notificationBigMsg =
-                intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_BIG_MSG).toString()
-        }
-
-        val notification = getNotification()
-        val notificationManager =
-            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(notificationId, notification)
+private fun updateNotification(intent: Intent) {
+    if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_TITLE)) {
+        notificationTitle = intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_TITLE).toString()
     }
 
+    if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_MSG)) {
+        notificationMsg = intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_MSG).toString()
+    }
+
+    if (intent.hasExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_BIG_MSG)) {
+        notificationBigMsg = intent.getStringExtra(Keys.SETTINGS_ANDROID_NOTIFICATION_BIG_MSG).toString()
+    }
+
+    val notification = getNotification()
+    val notificationManager =
+        getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    notificationManager.notify(notificationId, notification)
+}
     private fun getMainActivityClass(context: Context): Class<*>? {
         val packageName = context.packageName
         val launchIntent = context.packageManager.getLaunchIntentForPackage(packageName)
